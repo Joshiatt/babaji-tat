@@ -15,9 +15,9 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   onChange,
 }) => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [period, setPeriod] = useState<"AM" | "PM">("AM");
-  const [hour, setHour] = useState<number>(12);
+  const [hour, setHour] = useState<number>(10);
   const [minute, setMinute] = useState<number>(0);
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleDateChange = (date: Date | null) => {
     if (!date) {
@@ -27,46 +27,25 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
     // Apply current time to the selected date
     const newDate = new Date(date);
-    let hours24 = hour;
-
-    if (period === "PM" && hour !== 12) {
-      hours24 = hour + 12;
-    } else if (period === "AM" && hour === 12) {
-      hours24 = 0;
-    }
-
-    newDate.setHours(hours24, minute, 0, 0);
+    newDate.setHours(hour, minute, 0, 0);
     setSelectedDate(newDate);
 
-    if (onChange) {
-      onChange(newDate.toISOString());
-    }
+    // Don't close the picker - let user select time
+    // if (onChange) {
+    //   onChange(newDate.toISOString());
+    // }
   };
 
-  const handleTimeChange = (
-    newPeriod?: "AM" | "PM",
-    newHour?: number,
-    newMinute?: number,
-  ) => {
-    const updatedPeriod = newPeriod ?? period;
+  const handleTimeChange = (newHour?: number, newMinute?: number) => {
     const updatedHour = newHour ?? hour;
     const updatedMinute = newMinute ?? minute;
 
-    setPeriod(updatedPeriod);
     setHour(updatedHour);
     setMinute(updatedMinute);
 
     if (selectedDate) {
       const newDate = new Date(selectedDate);
-      let hours24 = updatedHour;
-
-      if (updatedPeriod === "PM" && updatedHour !== 12) {
-        hours24 = updatedHour + 12;
-      } else if (updatedPeriod === "AM" && updatedHour === 12) {
-        hours24 = 0;
-      }
-
-      newDate.setHours(hours24, updatedMinute, 0, 0);
+      newDate.setHours(updatedHour, updatedMinute, 0, 0);
       setSelectedDate(newDate);
 
       if (onChange) {
@@ -75,12 +54,22 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
     }
   };
 
+  const handleConfirm = () => {
+    if (selectedDate && onChange) {
+      const finalDate = new Date(selectedDate);
+      finalDate.setHours(hour, minute, 0, 0);
+      onChange(finalDate.toISOString());
+      setIsOpen(false);
+    }
+  };
+
   const generateHours = () => {
-    return Array.from({ length: 12 }, (_, i) => i + 1);
+    return Array.from({ length: 24 }, (_, i) => i);
   };
 
   const generateMinutes = () => {
-    return Array.from({ length: 60 }, (_, i) => i);
+    // Generate minutes in 15-minute intervals for simplicity
+    return [0, 15, 30, 45];
   };
 
   return (
@@ -90,56 +79,27 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
         <DatePicker
           selected={selectedDate}
           onChange={handleDateChange}
-          dateFormat="d MMM yyyy, h:mm aa"
+          onClickOutside={() => setIsOpen(false)}
+          onCalendarClose={() => setIsOpen(false)}
+          onCalendarOpen={() => setIsOpen(true)}
+          open={isOpen}
+          dateFormat="d MMM yyyy, HH:mm"
           minDate={new Date()}
           placeholderText={placeholder}
           className="datetime-input"
           wrapperClassName="datetime-wrapper"
           calendarClassName="datetime-calendar"
-          popperClassName="datetime-popper"
           autoComplete="off"
           showPopperArrow={false}
           popperPlacement="bottom-start"
-          popperModifiers={
-            [
-              {
-                name: "offset",
-                options: {
-                  offset: [0, 8],
-                },
-              },
-              {
-                name: "preventOverflow",
-                options: {
-                  rootBoundary: "viewport",
-                  tether: false,
-                  altAxis: true,
-                },
-              },
-            ] as any
-          }
+          onInputClick={() => setIsOpen(true)}
+          shouldCloseOnSelect={false}
         >
           <div className="custom-time-picker-inline">
-            <div className="custom-time-header">Select Time</div>
+            <div className="custom-time-header">
+              Select Time (24-hour format)
+            </div>
             <div className="custom-time-selectors">
-              {/* AM/PM Selector */}
-              <div className="time-selector-column">
-                <div className="time-selector-label">Period</div>
-                <div className="time-selector-options">
-                  {["AM", "PM"].map((p) => (
-                    <button
-                      key={p}
-                      className={`time-option ${period === p ? "selected" : ""}`}
-                      onClick={() =>
-                        handleTimeChange(p as "AM" | "PM", undefined, undefined)
-                      }
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Hour Selector */}
               <div className="time-selector-column">
                 <div className="time-selector-label">Hour</div>
@@ -147,10 +107,14 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   {generateHours().map((h) => (
                     <button
                       key={h}
+                      type="button"
                       className={`time-option ${hour === h ? "selected" : ""}`}
-                      onClick={() => handleTimeChange(undefined, h, undefined)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleTimeChange(h, undefined);
+                      }}
                     >
-                      {h.toString().padStart(2, "0")}
+                      {h.toString().padStart(2, "0")}:00
                     </button>
                   ))}
                 </div>
@@ -158,19 +122,36 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
               {/* Minute Selector */}
               <div className="time-selector-column">
-                <div className="time-selector-label">Minute</div>
-                <div className="time-selector-options scrollable">
+                <div className="time-selector-label">Minutes</div>
+                <div className="time-selector-options">
                   {generateMinutes().map((m) => (
                     <button
                       key={m}
+                      type="button"
                       className={`time-option ${minute === m ? "selected" : ""}`}
-                      onClick={() => handleTimeChange(undefined, undefined, m)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleTimeChange(undefined, m);
+                      }}
                     >
-                      {m.toString().padStart(2, "0")}
+                      :{m.toString().padStart(2, "0")}
                     </button>
                   ))}
                 </div>
               </div>
+            </div>
+            <div className="custom-time-footer">
+              <button
+                type="button"
+                className="time-confirm-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleConfirm();
+                }}
+                disabled={!selectedDate}
+              >
+                Confirm Date & Time
+              </button>
             </div>
           </div>
         </DatePicker>
